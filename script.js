@@ -1,5 +1,9 @@
 // ======================= API CONFIG =======================
-const API_BASE = 'api';
+const API_BASE = (() => {
+  if (window.APP_CONFIG?.API_BASE) return window.APP_CONFIG.API_BASE;
+  if (window.location.protocol === 'file:') return 'http://localhost:8000/api';
+  return `${window.location.origin}/api`;
+})();
 
 // ======================= DATA & STORAGE =======================
 let currentUser = null;
@@ -44,6 +48,71 @@ function saveCurrentUser() {
 let currentFilter = "all";
 let currentSearch = "";
 let viewMode = "home";
+let currentPreviewObjectUrl = null;
+
+function updateProductImagePreview() {
+  const fileInput = document.getElementById('productImageFile');
+  const urlInput = document.getElementById('productImage');
+  const previewWrap = document.getElementById('productImagePreviewWrap');
+  const previewImg = document.getElementById('productImagePreview');
+  if (!fileInput || !urlInput || !previewWrap || !previewImg) return;
+
+  const selectedFile = fileInput.files?.[0];
+  if (selectedFile) {
+    if (currentPreviewObjectUrl) {
+      URL.revokeObjectURL(currentPreviewObjectUrl);
+      currentPreviewObjectUrl = null;
+    }
+    const objectUrl = URL.createObjectURL(selectedFile);
+    currentPreviewObjectUrl = objectUrl;
+    previewImg.src = objectUrl;
+    previewWrap.style.display = 'block';
+    return;
+  }
+
+  const urlValue = urlInput.value.trim();
+  if (urlValue) {
+    if (currentPreviewObjectUrl) {
+      URL.revokeObjectURL(currentPreviewObjectUrl);
+      currentPreviewObjectUrl = null;
+    }
+    previewImg.src = urlValue;
+    previewWrap.style.display = 'block';
+    return;
+  }
+
+  if (currentPreviewObjectUrl) {
+    URL.revokeObjectURL(currentPreviewObjectUrl);
+    currentPreviewObjectUrl = null;
+  }
+  previewImg.removeAttribute('src');
+  previewWrap.style.display = 'none';
+}
+
+function clearSelectedProductImage() {
+  const fileInput = document.getElementById('productImageFile');
+  const urlInput = document.getElementById('productImage');
+  if (fileInput) fileInput.value = '';
+  if (urlInput) urlInput.value = '';
+  updateProductImagePreview();
+}
+
+async function uploadProductImage(file) {
+  const formData = new FormData();
+  formData.append('image', file);
+
+  const res = await fetch(`${API_BASE}/upload.php`, {
+    method: 'POST',
+    body: formData
+  });
+
+  const result = await res.json();
+  if (!res.ok || !result.success || !result.url) {
+    throw new Error(result.message || 'Image upload failed');
+  }
+
+  return result.url;
+}
 
 function renderMarketplace() {
   let filtered = [...allProducts];
@@ -197,14 +266,19 @@ async function addProduct() {
   const priceRaw = document.getElementById('productPrice').value.trim();
   const story = document.getElementById('productStory').value.trim();
   const category = document.getElementById('productCategory').value;
+  const imageFile = document.getElementById('productImageFile').files?.[0] || null;
   let imageUrl = document.getElementById('productImage').value.trim();
   if(!name || !priceRaw) { alert("Name and price required"); return; }
   const priceNum = parseInt(priceRaw.replace(/[^0-9]/g,''));
   if(isNaN(priceNum)) { alert("Valid price required"); return; }
   const formattedPrice = priceNum.toLocaleString();
-  if(!imageUrl) imageUrl = `https://source.unsplash.com/featured/400x300/?uganda,craft&sig=${Date.now()}`;
   
   try {
+    if (imageFile) {
+      imageUrl = await uploadProductImage(imageFile);
+    }
+    if(!imageUrl) imageUrl = `https://source.unsplash.com/featured/400x300/?uganda,craft&sig=${Date.now()}`;
+
     const res = await fetch(`${API_BASE}/products.php?action=add`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -227,7 +301,9 @@ async function addProduct() {
       document.getElementById('productName').value='';
       document.getElementById('productPrice').value='';
       document.getElementById('productStory').value='';
+      document.getElementById('productImageFile').value='';
       document.getElementById('productImage').value='';
+      updateProductImagePreview();
       alert("✅ Product published!");
       if(viewMode==='mygoods') renderMarketplace();
     } else {
@@ -257,5 +333,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('closeMakerModalBtn').onclick = closeMakerProfile;
   document.getElementById('switchToLoginBtn').onclick = toggleToLogin;
   document.getElementById('switchToRegisterBtn').onclick = toggleToRegister;
+  document.getElementById('productImageFile').addEventListener('change', updateProductImagePreview);
+  document.getElementById('productImage').addEventListener('input', updateProductImagePreview);
+  document.getElementById('clearProductImageBtn').addEventListener('click', clearSelectedProductImage);
   window.openWhatsAppChat = openWhatsAppChat; window.viewMakerGoods = viewMakerGoods; window.resetToHome = resetToHome; window.handleSearch = handleSearch;
 });

@@ -53,7 +53,21 @@ php -S localhost:8000
 
 Visit `http://localhost:8000`
 
-### Option 3: With Supabase
+### Option 3: Run with Docker (Recommended)
+
+```bash
+# 1) copy env template
+cp .env.example .env
+
+# 2) update .env with your real Supabase keys
+
+# 3) build and run
+docker compose up --build
+```
+
+Visit `http://localhost:8000`
+
+### Option 4: With Supabase
 
 1. Create a Supabase project at [supabase.com](https://supabase.com)
 2. Run `database/supabase-schema.sql` in the SQL Editor
@@ -100,9 +114,107 @@ The included `.htaccess` file handles:
 - PHP error logging
 - Security headers
 
+### Production Environment Variables
+
+Set these on your server (cPanel, Plesk, VPS, or Apache/Nginx env config):
+
+```bash
+SUPABASE_URL=https://your-project-id.supabase.co
+SUPABASE_KEY=your-supabase-anon-key
+SUPABASE_SERVICE_KEY=your-supabase-service-role-key
+ALLOWED_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
+```
+
+Notes:
+- `ALLOWED_ORIGINS` is comma-separated.
+- Keep `SUPABASE_SERVICE_KEY` private (never expose in browser JavaScript).
+- Do not commit real secrets to Git.
+
+### Docker Deployment (Containerized)
+
+Files added for containerization:
+- `Dockerfile`
+- `docker/apache-site.conf`
+- `docker-compose.yml`
+- `.env.example`
+- `.dockerignore`
+
+Run locally:
+
+```bash
+cp .env.example .env
+docker compose up --build -d
+```
+
+Stop:
+
+```bash
+docker compose down
+```
+
+Notes:
+- App runs on `http://localhost:8000`.
+- Uploaded product images are persisted via `./uploads` volume.
+- Make sure your `.env` contains valid Supabase keys before testing register/login/add product.
+
+### Frontend API Base (Optional Override)
+
+By default, frontend calls `${window.location.origin}/api`.  
+If your API is hosted on a different domain, set this in `index.html` before `script.js`:
+
+```html
+<script>
+  window.APP_CONFIG = {
+    API_BASE: 'https://api.yourdomain.com'
+  };
+</script>
+```
+
+If frontend and API are on the same domain, keep the default:
+
+```html
+<script>
+  window.APP_CONFIG = window.APP_CONFIG || {};
+</script>
+```
+
+### Deploy on Shared Hosting (Apache + PHP) — Step by Step
+
+1. Create hosting + connect your domain.
+2. Ensure hosting supports:
+   - PHP 8+
+   - `mod_rewrite`
+   - `curl` extension
+3. Upload project files to `public_html/` (or your web root).
+4. Confirm `.htaccess` exists in web root.
+5. Add environment variables (`SUPABASE_URL`, keys, `ALLOWED_ORIGINS`).
+6. In `.htaccess`, enable HTTPS redirect by uncommenting:
+   - `RewriteCond %{HTTPS} off`
+   - `RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]`
+7. Verify API endpoints in browser or Postman:
+   - `https://yourdomain.com/api/products?action=list`
+   - `https://yourdomain.com/api/makers?action=list`
+8. Test full user flows:
+   - Register maker
+   - Login maker
+   - Add product
+   - WhatsApp order button
+9. Turn off debug display in production (already handled in `.htaccess`).
+10. Set up backups for Supabase and hosting files.
+
+### VPS Deployment (Nginx/Apache) Quick Notes
+
+- Point domain DNS to VPS.
+- Install PHP 8+, web server, SSL cert (Let's Encrypt).
+- Set web root to project folder.
+- Configure rewrite rules equivalent to `.htaccess`.
+- Set env vars in server config/systemd/PHP-FPM pool.
+- Reload services and run smoke tests.
+
 ### Production Checklist
 
-- [ ] Update Supabase credentials in `api/config.php`
+- [ ] Set server environment variables (`SUPABASE_URL`, `SUPABASE_KEY`, `SUPABASE_SERVICE_KEY`)
+- [ ] Set `ALLOWED_ORIGINS` to your production domain(s)
 - [ ] Enable HTTPS
 - [ ] Set proper file permissions
 - [ ] Configure error logging

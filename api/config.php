@@ -4,9 +4,29 @@
  * Update these values with your Supabase credentials
  */
 
-define('SUPABASE_URL', 'https://YOUR_PROJECT_ID.supabase.co');
-define('SUPABASE_KEY', 'YOUR_ANON_KEY');
-define('SUPABASE_SERVICE_KEY', 'YOUR_SERVICE_ROLE_KEY');
+define('SUPABASE_URL', getenv('SUPABASE_URL') ?: 'https://YOUR_PROJECT_ID.supabase.co');
+define('SUPABASE_KEY', getenv('SUPABASE_KEY') ?: 'YOUR_ANON_KEY');
+define('SUPABASE_SERVICE_KEY', getenv('SUPABASE_SERVICE_KEY') ?: 'YOUR_SERVICE_ROLE_KEY');
+
+/**
+ * Handle CORS using an allowlist.
+ * Set ALLOWED_ORIGINS as comma-separated values in production.
+ */
+function handleCors() {
+    $allowedOriginsRaw = getenv('ALLOWED_ORIGINS') ?: '';
+    $allowedOrigins = array_filter(array_map('trim', explode(',', $allowedOriginsRaw)));
+    $allowedOrigins[] = 'http://localhost:8000';
+    $allowedOrigins[] = 'http://127.0.0.1:8000';
+
+    $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+    if ($origin && in_array($origin, $allowedOrigins, true)) {
+        header('Access-Control-Allow-Origin: ' . $origin);
+        header('Vary: Origin');
+    }
+
+    header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization');
+}
 
 /**
  * Make API request to Supabase
@@ -113,6 +133,13 @@ function getUniqueMakers() {
  * Register new maker
  */
 function registerMaker($name, $email, $password, $whatsapp) {
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        return ['success' => false, 'message' => 'Invalid email'];
+    }
+    if (strlen($password) < 6) {
+        return ['success' => false, 'message' => 'Password must be at least 6 characters'];
+    }
+
     // Check if email exists
     $check = supabaseRequest('makers?email=eq.' . urlencode($email) . '&limit=1');
     if (!empty($check['data'])) {
@@ -122,7 +149,7 @@ function registerMaker($name, $email, $password, $whatsapp) {
     $data = [
         'name' => $name,
         'email' => $email,
-        'password' => $password, // In production, hash this!
+        'password' => password_hash($password, PASSWORD_DEFAULT),
         'whatsapp' => $whatsapp
     ];
     
@@ -139,13 +166,22 @@ function registerMaker($name, $email, $password, $whatsapp) {
  * Login maker
  */
 function loginMaker($email, $password) {
-    $result = supabaseRequest('makers?email=eq.' . urlencode($email) . '&password=eq.' . $password . '&limit=1');
-    
-    if (!empty($result['data'])) {
-        return ['success' => true, 'data' => $result['data'][0]];
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        return ['success' => false, 'message' => 'Invalid credentials'];
     }
-    
-    return ['success' => false, 'message' => 'Invalid credentials'];
+
+    $result = supabaseRequest('makers?email=eq.' . urlencode($email) . '&limit=1');
+    if (empty($result['data'])) {
+        return ['success' => false, 'message' => 'Invalid credentials'];
+    }
+
+    $maker = $result['data'][0];
+    if (!isset($maker['password']) || !password_verify($password, $maker['password'])) {
+        return ['success' => false, 'message' => 'Invalid credentials'];
+    }
+
+    unset($maker['password']);
+    return ['success' => true, 'data' => $maker];
 }
 
 /**

@@ -4,17 +4,14 @@
  */
 
 header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+require_once 'config.php';
+handleCors();
 
 // Handle preflight
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
 }
-
-require_once 'config.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
 $action = $_GET['action'] ?? '';
@@ -29,11 +26,23 @@ switch ($action) {
     case 'register':
         if ($method === 'POST') {
             $input = json_decode(file_get_contents('php://input'), true);
+            if (
+                !is_array($input) ||
+                empty(trim($input['name'] ?? '')) ||
+                empty(trim($input['email'] ?? '')) ||
+                empty($input['password']) ||
+                empty(trim($input['whatsapp'] ?? ''))
+            ) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'Missing required fields']);
+                break;
+            }
+
             $result = registerMaker(
-                $input['name'],
-                $input['email'],
+                trim($input['name']),
+                trim($input['email']),
                 $input['password'],
-                $input['whatsapp']
+                trim($input['whatsapp'])
             );
             echo json_encode($result);
         } else {
@@ -45,7 +54,17 @@ switch ($action) {
     case 'login':
         if ($method === 'POST') {
             $input = json_decode(file_get_contents('php://input'), true);
-            $result = loginMaker($input['email'], $input['password']);
+            if (
+                !is_array($input) ||
+                empty(trim($input['email'] ?? '')) ||
+                empty($input['password'])
+            ) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'Email and password are required']);
+                break;
+            }
+
+            $result = loginMaker(trim($input['email']), $input['password']);
             echo json_encode($result);
         } else {
             http_response_code(405);

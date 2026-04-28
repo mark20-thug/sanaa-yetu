@@ -4,17 +4,14 @@
  */
 
 header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+require_once 'config.php';
+handleCors();
 
 // Handle preflight
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
 }
-
-require_once 'config.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
 $action = $_GET['action'] ?? '';
@@ -48,15 +45,29 @@ switch ($action) {
     case 'add':
         if ($method === 'POST') {
             $input = json_decode(file_get_contents('php://input'), true);
+            if (
+                !is_array($input) ||
+                empty(trim($input['name'] ?? '')) ||
+                empty(trim($input['price'] ?? '')) ||
+                empty(trim($input['category'] ?? '')) ||
+                empty(trim($input['artisan_id'] ?? '')) ||
+                empty(trim($input['artisan_name'] ?? '')) ||
+                empty(trim($input['artisan_whatsapp'] ?? ''))
+            ) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'Missing required product fields']);
+                break;
+            }
+
             $result = addProduct(
-                $input['name'],
-                $input['price'],
-                $input['story'] ?? '',
-                $input['category'],
-                $input['image_url'] ?? '',
-                $input['artisan_id'],
-                $input['artisan_name'],
-                $input['artisan_whatsapp']
+                trim($input['name']),
+                trim($input['price']),
+                trim($input['story'] ?? ''),
+                trim($input['category']),
+                trim($input['image_url'] ?? ''),
+                trim($input['artisan_id']),
+                trim($input['artisan_name']),
+                trim($input['artisan_whatsapp'])
             );
             echo json_encode($result);
         } else {
