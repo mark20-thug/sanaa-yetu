@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Sanaa Yetu — Ugandan Artisan Marketplace | Join Makers</title>
+<!-- Font Awesome 6 -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;400;500;600;700&family=Playfair+Display:wght@700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="amazon-header">
+  <div class="header-inner">
+    <div class="logo" onclick="resetToHome()">SanaaYetu<span>.ug</span></div>
+    <div class="search-bar">
+      <input type="text" id="searchInput" placeholder="Search by product or maker name..." onkeyup="handleSearch()">
+      <button onclick="handleSearch()"><i class="fas fa-search"></i></button>
+    </div>
+    <div class="nav-actions">
+      <div id="userGreeting" class="user-greeting" style="display:none;"></div>
+      <button class="nav-btn" id="authBtn"><i class="fas fa-user-plus"></i> Join as Maker</button>
+      <button class="nav-btn" id="myGoodsBtn" style="display:none;"><i class="fas fa-box"></i> My Goods</button>
+      <button class="nav-btn" id="dashboardBtn" style="display:none;"><i class="fas fa-store"></i> Studio</button>
+      <button class="nav-btn" id="logoutBtn" style="display:none;"><i class="fas fa-sign-out-alt"></i> Logout</button>
+    </div>
+  </div>
+</div>
+
+<div class="hero-banner">
+  <div class="hero-content">
+    <h1><i class="fas fa-hands"></i> Handmade with Heritage</h1>
+    <p>Direct from Ugandan artisans — tap any item to WhatsApp the maker instantly!</p>
+  </div>
+</div>
+
+<div class="category-row" id="categoryRow">
+  <div class="category-badge active" data-cat="all"><i class="fas fa-border-all"></i> All</div>
+  <div class="category-badge" data-cat="Beadwork"><i class="fas fa-gem"></i> Beadwork</div>
+  <div class="category-badge" data-cat="Bark Cloth"><i class="fas fa-tree"></i> Bark Cloth</div>
+  <div class="category-badge" data-cat="Drums"><i class="fas fa-drum"></i> Drums</div>
+  <div class="category-badge" data-cat="Baskets"><i class="fas fa-basketball"></i> Baskets</div>
+  <div class="category-badge" data-cat="Pottery"><i class="fas fa-palette"></i> Pottery</div>
+</div>
+
+<main class="main-container">
+  <div id="viewTitle" class="view-title-bar"></div>
+  <div id="productsGrid" class="products-grid"></div>
+  <div id="shopsSection">
+    <div class="section-header" style="display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid var(--amazon-orange); padding-bottom: 8px; margin: 30px 0 20px;">
+      <h2><i class="fas fa-users"></i> Meet the Makers</h2>
+    </div>
+    <div id="shopsGrid" class="shop-grid"></div>
+  </div>
+</main>
+
+<div class="amazon-footer"><p><i class="fas fa-heart" style="color:#e6b422;"></i> Sanaa Yetu — Tap any item, chat on WhatsApp, support Ugandan artisans directly.</p></div>
+
+<!-- JOIN MAKER MODAL (FIXED) -->
+<div id="authModal" class="modal-overlay">
+  <div class="modal-container">
+    <div class="modal-header">
+      <h3 id="authModalTitle"><i class="fas fa-hands-helping"></i> Become a Maker</h3>
+      <button class="close-modal-btn" id="closeAuthModalBtn">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="loginForm">
+        <div class="form-group"><input type="text" id="loginName" placeholder="Full Name *"></div>
+        <div class="form-group"><input type="email" id="loginEmail" placeholder="Email *"></div>
+        <div class="form-group"><input type="password" id="loginPassword" placeholder="Password (min 4) *"></div>
+        <div class="form-group"><input type="tel" id="whatsappNumber" placeholder="WhatsApp (with code) * e.g., +256700123456"></div>
+        <small style="color:#666; display:block; margin-bottom:15px;">Your WhatsApp will be shown to buyers for orders</small>
+        <button class="btn-primary" id="doRegisterBtn"><i class="fab fa-whatsapp"></i> Create Artisan Account</button>
+        <div class="toggle-auth" id="switchToLoginBtn">Already have an account? <strong>Login</strong></div>
+      </div>
+      <div id="signinForm" style="display:none;">
+        <div class="form-group"><input type="email" id="signinEmail" placeholder="Email"></div>
+        <div class="form-group"><input type="password" id="signinPassword" placeholder="Password"></div>
+        <button class="btn-primary" id="doLoginBtn"><i class="fas fa-sign-in-alt"></i> Login to Studio</button>
+        <div class="toggle-auth" id="switchToRegisterBtn">New artist? <strong>Create Account</strong></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ARTISAN STUDIO MODAL -->
+<div id="dashboardModal" class="modal-overlay">
+  <div class="modal-container" style="max-width: 700px;">
+    <div class="modal-header">
+      <h3><i class="fas fa-palette"></i> My Artisan Studio</h3>
+      <button class="close-modal-btn" id="closeDashboardModalBtn">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p><strong id="dashboardUserName"></strong> — add your crafts (WhatsApp will be visible)</p>
+      <div class="form-group"><input type="text" id="productName" placeholder="Product name *"></div>
+      <div class="form-group"><input type="text" id="productPrice" placeholder="Price (UGX) *"></div>
+      <div class="form-group">
+        <select id="productCategory">
+          <option value="Beadwork">Beadwork</option><option value="Bark Cloth">Bark Cloth</option>
+          <option value="Drums">Drums</option><option value="Baskets">Baskets</option><option value="Pottery">Pottery</option>
+        </select>
+      </div>
+      <div class="form-group"><textarea id="productStory" placeholder="Story & materials..."></textarea></div>
+      <div class="form-group"><input type="text" id="productImage" placeholder="Image URL (optional)"></div>
+      <button class="btn-primary" id="publishProductBtn"><i class="fas fa-cloud-upload-alt"></i> Publish to Marketplace</button>
+      <h4 style="margin-top:25px;">Your Products</h4>
+      <div id="artisanProductList" class="products-list-dash"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MAKER PROFILE MODAL -->
+<div id="makerProfileModal" class="modal-overlay">
+  <div class="modal-container" style="max-width: 700px;">
+    <div class="modal-header">
+      <h3 id="makerProfileTitle">Maker's Goods</h3>
+      <button class="close-modal-btn" id="closeMakerModalBtn">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="makerProductsGrid" style="display:grid; gap:12px;"></div>
+    </div>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
