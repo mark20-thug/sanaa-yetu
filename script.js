@@ -9,6 +9,23 @@ const API_BASE = (() => {
 let currentUser = null;
 let allProducts = [];
 let makers = [];
+let makerRatings = {};
+let productRatings = {};
+const PLAN_CONFIG = {
+  starter: { label: 'Starter', amount: 30000, maxProducts: 10, canFeature: false },
+  pro: { label: 'Studio Pro', amount: 70000, maxProducts: 100, canFeature: false },
+  featured: { label: 'Featured Plus', amount: 120000, maxProducts: 200, canFeature: true }
+};
+
+const RATER_TOKEN_KEY = 'sanaa_rater_token';
+function getRaterToken() {
+  let token = localStorage.getItem(RATER_TOKEN_KEY);
+  if (!token) {
+    token = `${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
+    localStorage.setItem(RATER_TOKEN_KEY, token);
+  }
+  return token;
+}
 
 async function loadData() {
   try {
@@ -32,6 +49,37 @@ async function loadData() {
   }
 }
 
+async function loadRatings() {
+  const makerIds = [...new Set(allProducts.map(p => p.artisan_id).filter(Boolean))];
+  const productIds = [...new Set(allProducts.map(p => p.id).filter(Boolean))];
+
+  await Promise.all([
+    Promise.all(makerIds.map(async (makerId) => {
+      try {
+        const res = await fetch(`${API_BASE}/ratings.php?action=maker_summary&maker_id=${encodeURIComponent(makerId)}`);
+        const payload = await res.json();
+        makerRatings[makerId] = payload.success ? payload.data : { avg: 0, count: 0 };
+      } catch {
+        makerRatings[makerId] = { avg: 0, count: 0 };
+      }
+    })),
+    Promise.all(productIds.map(async (productId) => {
+      try {
+        const res = await fetch(`${API_BASE}/ratings.php?action=product_summary&product_id=${encodeURIComponent(productId)}`);
+        const payload = await res.json();
+        productRatings[productId] = payload.success ? payload.data : { avg: 0, count: 0 };
+      } catch {
+        productRatings[productId] = { avg: 0, count: 0 };
+      }
+    }))
+  ]);
+}
+
+function formatRating(summary) {
+  if (!summary || !summary.count) return 'No ratings yet';
+  return `⭐ ${summary.avg} (${summary.count})`;
+}
+
 async function saveProducts() {
   localStorage.setItem("sanaa_all_products", JSON.stringify(allProducts));
 }
@@ -49,6 +97,7 @@ let currentFilter = "all";
 let currentSearch = "";
 let viewMode = "home";
 let currentPreviewObjectUrl = null;
+let ratingDraft = { type: null, makerId: null, productId: null, score: 0, targetLabel: '' };
 
 function updateProductImagePreview() {
   const fileInput = document.getElementById('productImageFile');
@@ -97,6 +146,20 @@ function clearSelectedProductImage() {
   updateProductImagePreview();
 }
 
+function getSelectedPlan() {
+  const selected = document.querySelector('input[name="makerPlan"]:checked');
+  return selected ? selected.value : 'starter';
+}
+
+function updateSelectedPlanSummary() {
+  const planKey = getSelectedPlan();
+  const plan = PLAN_CONFIG[planKey] || PLAN_CONFIG.starter;
+  const summary = document.getElementById('selectedPlanSummary');
+  if (summary) {
+    summary.value = `Selected: ${plan.label} (UGX ${plan.amount.toLocaleString()}/month)`;
+  }
+}
+
 async function uploadProductImage(file) {
   const formData = new FormData();
   formData.append('image', file);
@@ -133,9 +196,11 @@ function renderMarketplace() {
       <div class="product-info">
         <div class="product-title">${escapeHtml(p.name)}</div>
         <div class="product-price">UGX ${escapeHtml(p.price)}</div>
+        <div class="product-story">⭐ ${escapeHtml(formatRating(productRatings[p.id]))}</div>
         <div class="product-story">📖 ${escapeHtml(p.story?.substring(0, 80))}</div>
         <div class="artisan-link" onclick="event.stopPropagation(); viewMakerGoods('${p.artisan_id}', '${escapeHtml(p.artisan_name)}')"><i class="fas fa-user"></i> View ${escapeHtml(p.artisan_name)}'s goods</div>
         <button class="whatsapp-btn" onclick="event.stopPropagation(); openWhatsAppChat('${p.artisan_whatsapp}', '${escapeHtml(p.name)}')"><i class="fab fa-whatsapp"></i> Order via WhatsApp</button>
+        <button class="whatsapp-btn" style="margin-top:8px; background:#1f2937;" onclick="event.stopPropagation(); rateProductPrompt('${p.id}', '${p.artisan_id}')"><i class="fas fa-star"></i> Rate Product</button>
       </div>
     </div>
   `).join('');
@@ -150,7 +215,9 @@ function renderShops() {
   grid.innerHTML = Array.from(uniqueMakersMap.values()).map(m => `
     <div class="shop-item" onclick="viewMakerGoods('${m.id}', '${escapeHtml(m.name)}')">
       <div class="shop-name"><i class="fas fa-store"></i> ${escapeHtml(m.name)}</div>
+      <div class="product-story" style="margin-top:6px;">${escapeHtml(formatRating(makerRatings[m.id]))}</div>
       <button class="whatsapp-btn" style="margin-top:10px; background:#25D366;" onclick="event.stopPropagation(); window.open('https://wa.me/${m.whatsapp.replace(/[^0-9]/g, '')}?text=Hello!%20I'm%20interested%20in%20your%20artisan%20products%20on%20SanaaYetu', '_blank')"><i class="fab fa-whatsapp"></i> Contact Maker</button>
+      <button class="whatsapp-btn" style="margin-top:8px; background:#1f2937;" onclick="event.stopPropagation(); rateMakerPrompt('${m.id}')"><i class="fas fa-star"></i> Rate Maker</button>
     </div>
   `).join('');
 }
@@ -164,7 +231,10 @@ function viewMakerGoods(makerId, makerName) {
     container.innerHTML = makerProducts.map(p => `
       <div class="product-item-dash" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap;">
         <div><strong>${escapeHtml(p.name)}</strong> — UGX ${escapeHtml(p.price)}<br><small>${escapeHtml(p.story?.substring(0,60))}</small></div>
-        <button class="whatsapp-btn" style="padding:6px 12px; width:auto;" onclick="window.open('https://wa.me/${p.artisan_whatsapp.replace(/[^0-9]/g, '')}?text=I'd%20like%20to%20order%20${encodeURIComponent(p.name)}', '_blank')"><i class="fab fa-whatsapp"></i> Order</button>
+        <div style="display:flex; gap:8px;">
+          <button class="whatsapp-btn" style="padding:6px 12px; width:auto;" onclick="window.open('https://wa.me/${p.artisan_whatsapp.replace(/[^0-9]/g, '')}?text=I'd%20like%20to%20order%20${encodeURIComponent(p.name)}', '_blank')"><i class="fab fa-whatsapp"></i> Order</button>
+          <button class="whatsapp-btn" style="padding:6px 12px; width:auto; background:#1f2937;" onclick="rateProductPrompt('${p.id}', '${p.artisan_id}')"><i class="fas fa-star"></i> Rate</button>
+        </div>
       </div>
     `).join('');
   }
@@ -182,6 +252,93 @@ function highlightActiveCategory() { document.querySelectorAll('.category-badge'
 function updateViewTitle() { const titleDiv = document.getElementById('viewTitle'); if (viewMode === "mygoods") titleDiv.innerHTML = `<div style="display:flex; justify-content:space-between;"><span><i class="fas fa-box"></i> My Goods</span><span class="back-link" onclick="resetToHome()">← Back to Home</span></div>`; else titleDiv.innerHTML = ''; }
 function showMyGoods() { if(!currentUser) { alert("Please login as maker first"); return; } viewMode = "mygoods"; currentFilter = "all"; currentSearch = ""; document.getElementById('searchInput').value = ""; renderMarketplace(); updateViewTitle(); }
 
+async function rateMakerPrompt(makerId) {
+  const maker = makers.find((m) => m.id === makerId);
+  openRatingModal({
+    type: 'maker',
+    makerId,
+    productId: null,
+    targetLabel: maker?.name || 'this maker'
+  });
+}
+
+async function rateProductPrompt(productId, makerId) {
+  const product = allProducts.find((p) => p.id === productId);
+  openRatingModal({
+    type: 'product',
+    makerId,
+    productId,
+    targetLabel: product?.name || 'this product'
+  });
+}
+
+function setRatingStars(score) {
+  ratingDraft.score = score;
+  document.querySelectorAll('.rating-star').forEach((btn) => {
+    const value = parseInt(btn.dataset.score, 10);
+    if (value <= score) btn.classList.add('active');
+    else btn.classList.remove('active');
+  });
+}
+
+function openRatingModal({ type, makerId, productId, targetLabel }) {
+  ratingDraft = { type, makerId, productId, score: 0, targetLabel };
+  document.getElementById('ratingComment').value = '';
+  setRatingStars(0);
+  document.getElementById('ratingModalTitle').innerHTML = `<i class="fas fa-star"></i> Rate ${type === 'maker' ? 'Maker' : 'Product'}`;
+  document.getElementById('ratingTargetText').innerText = `You are rating: ${targetLabel}`;
+  document.getElementById('ratingModal').style.display = 'flex';
+}
+
+function closeRatingModal() {
+  document.getElementById('ratingModal').style.display = 'none';
+}
+
+async function submitRatingFromModal() {
+  if (!ratingDraft.type || !ratingDraft.score) {
+    alert('Please select a star rating first.');
+    return;
+  }
+  const comment = document.getElementById('ratingComment').value.trim().substring(0, 200);
+
+  try {
+    const body = ratingDraft.type === 'maker'
+      ? {
+          maker_id: ratingDraft.makerId,
+          score: ratingDraft.score,
+          comment,
+          rater_token: getRaterToken()
+        }
+      : {
+          product_id: ratingDraft.productId,
+          maker_id: ratingDraft.makerId,
+          score: ratingDraft.score,
+          comment,
+          rater_token: getRaterToken()
+        };
+
+    const action = ratingDraft.type === 'maker' ? 'rate_maker' : 'rate_product';
+    const res = await fetch(`${API_BASE}/ratings.php?action=${action}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const result = await res.json();
+    if (!result.success) {
+      alert(result.message || 'Failed to submit rating');
+      return;
+    }
+    closeRatingModal();
+    await loadRatings();
+    renderMarketplace();
+    renderShops();
+    alert('Thanks! Your rating was submitted.');
+  } catch (e) {
+    console.error(e);
+    alert('Failed to submit rating');
+  }
+}
+
 // ======================= AUTH FIXED =======================
 function openAuthModal() { document.getElementById('authModal').style.display = 'flex'; }
 function closeAuthModal() { document.getElementById('authModal').style.display = 'none'; }
@@ -191,9 +348,12 @@ function toggleToLogin() { document.getElementById('loginForm').style.display='n
 function toggleToRegister() { document.getElementById('loginForm').style.display='block'; document.getElementById('signinForm').style.display='none'; document.getElementById('authModalTitle').innerHTML='<i class="fas fa-hands-helping"></i> Become a Maker'; }
 async function registerUser() {
   const name = document.getElementById('loginName').value.trim();
+  const businessName = document.getElementById('loginBusinessName').value.trim();
   const email = document.getElementById('loginEmail').value.trim();
   const password = document.getElementById('loginPassword').value;
   let whatsapp = document.getElementById('whatsappNumber').value.trim();
+  const location = document.getElementById('makerLocation').value.trim();
+  const bio = document.getElementById('makerBio').value.trim();
   if (!name || !email || !password || password.length < 4) { alert("All fields required, password min 4 chars"); return; }
   if (!whatsapp) { alert("WhatsApp number required for buyers to contact you!"); return; }
   if (!whatsapp.startsWith('+')) whatsapp = '+' + whatsapp.replace(/[^0-9]/g, '');
@@ -202,15 +362,22 @@ async function registerUser() {
     const res = await fetch(`${API_BASE}/makers.php?action=register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password, whatsapp })
+      body: JSON.stringify({
+        name,
+        business_name: businessName || name,
+        email,
+        password,
+        whatsapp,
+        location,
+        bio
+      })
     });
     const result = await res.json();
     
     if (result.success) {
-      currentUser = { id: result.data.id, name: result.data.name, email: result.data.email, whatsapp: result.data.whatsapp };
-      saveCurrentUser(); updateUIBasedOnAuth(); closeAuthModal();
-      alert(`✅ Welcome ${name}! Your artisan account is ready.`);
-      openDashboardModal();
+      alert("✅ Account created. Next: complete payment and submit your payment reference, then wait for admin approval.");
+      toggleToLogin();
+      document.getElementById('signinEmail').value = email;
     } else {
       alert(result.message || 'Registration failed');
     }
@@ -237,11 +404,45 @@ async function loginUser() {
       saveCurrentUser(); updateUIBasedOnAuth(); closeAuthModal();
       openDashboardModal();
     } else {
-      alert(result.message || 'Invalid credentials');
+      alert(result.message || 'Login failed');
     }
   } catch(e) {
     console.error(e);
     alert('Login failed. Please try again.');
+  }
+}
+
+async function submitPaymentReference() {
+  const email = document.getElementById('signinEmail').value.trim();
+  const paymentReference = document.getElementById('paymentReference').value.trim();
+  const selectedPlan = getSelectedPlan();
+  const selectedPlanConfig = PLAN_CONFIG[selectedPlan] || PLAN_CONFIG.starter;
+  if (!email || !paymentReference) {
+    alert("Enter your email and payment reference first.");
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/makers.php?action=submit_payment`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email,
+        payment_reference: paymentReference,
+        plan: selectedPlan,
+        amount_ugx: selectedPlanConfig.amount
+      })
+    });
+    const result = await res.json();
+    if (result.success) {
+      alert("✅ Payment submitted. Admin will review and approve your account.");
+      document.getElementById('paymentReference').value = '';
+    } else {
+      alert(result.message || 'Failed to submit payment reference');
+    }
+  } catch (e) {
+    console.error(e);
+    alert('Failed to submit payment reference');
   }
 }
 function logoutUser() { currentUser = null; saveCurrentUser(); viewMode="home"; currentFilter="all"; currentSearch=""; document.getElementById('searchInput').value=""; renderMarketplace(); renderShops(); updateUIBasedOnAuth(); updateViewTitle(); }
@@ -304,7 +505,7 @@ async function addProduct() {
       document.getElementById('productImageFile').value='';
       document.getElementById('productImage').value='';
       updateProductImagePreview();
-      alert("✅ Product published!");
+      alert(result.message || "✅ Product submitted and awaiting admin approval.");
       if(viewMode==='mygoods') renderMarketplace();
     } else {
       alert(result.message || 'Failed to add product');
@@ -318,7 +519,15 @@ function escapeHtml(str) { if(!str) return ''; return str.replace(/[&<>]/g, m =>
 
 // INITIALIZE WITH PROPER EVENT LISTENERS
 document.addEventListener('DOMContentLoaded', () => {
-  loadData(); renderMarketplace(); renderShops(); updateUIBasedOnAuth(); highlightActiveCategory(); updateViewTitle();
+  (async () => {
+    await loadData();
+    await loadRatings();
+    renderMarketplace();
+    renderShops();
+    updateUIBasedOnAuth();
+    highlightActiveCategory();
+    updateViewTitle();
+  })();
   
   document.querySelectorAll('.category-badge').forEach(el => el.addEventListener('click', () => filterByCategory(el.dataset.cat)));
   document.getElementById('authBtn').onclick = openAuthModal;
@@ -327,6 +536,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('logoutBtn').onclick = logoutUser;
   document.getElementById('doRegisterBtn').onclick = registerUser;
   document.getElementById('doLoginBtn').onclick = loginUser;
+  document.getElementById('submitPaymentBtn').onclick = submitPaymentReference;
   document.getElementById('publishProductBtn').onclick = addProduct;
   document.getElementById('closeAuthModalBtn').onclick = closeAuthModal;
   document.getElementById('closeDashboardModalBtn').onclick = closeDashboardModal;
@@ -336,5 +546,12 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('productImageFile').addEventListener('change', updateProductImagePreview);
   document.getElementById('productImage').addEventListener('input', updateProductImagePreview);
   document.getElementById('clearProductImageBtn').addEventListener('click', clearSelectedProductImage);
-  window.openWhatsAppChat = openWhatsAppChat; window.viewMakerGoods = viewMakerGoods; window.resetToHome = resetToHome; window.handleSearch = handleSearch;
+  document.querySelectorAll('input[name="makerPlan"]').forEach((el) => el.addEventListener('change', updateSelectedPlanSummary));
+  updateSelectedPlanSummary();
+  document.getElementById('closeRatingModalBtn').onclick = closeRatingModal;
+  document.getElementById('submitRatingBtn').onclick = submitRatingFromModal;
+  document.querySelectorAll('.rating-star').forEach((btn) => {
+    btn.addEventListener('click', () => setRatingStars(parseInt(btn.dataset.score, 10)));
+  });
+  window.openWhatsAppChat = openWhatsAppChat; window.viewMakerGoods = viewMakerGoods; window.resetToHome = resetToHome; window.handleSearch = handleSearch; window.rateMakerPrompt = rateMakerPrompt; window.rateProductPrompt = rateProductPrompt;
 });

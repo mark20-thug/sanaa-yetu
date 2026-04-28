@@ -42,7 +42,10 @@ switch ($action) {
                 trim($input['name']),
                 trim($input['email']),
                 $input['password'],
-                trim($input['whatsapp'])
+                trim($input['whatsapp']),
+                trim($input['business_name'] ?? ''),
+                trim($input['location'] ?? ''),
+                trim($input['bio'] ?? '')
             );
             echo json_encode($result);
         } else {
@@ -70,6 +73,43 @@ switch ($action) {
             http_response_code(405);
             echo json_encode(['error' => 'Method not allowed']);
         }
+        break;
+
+    case 'submit_payment':
+        if ($method === 'POST') {
+            $input = json_decode(file_get_contents('php://input'), true);
+            $email = trim($input['email'] ?? '');
+            $reference = trim($input['payment_reference'] ?? '');
+            $plan = trim($input['plan'] ?? 'starter');
+            $amount = intval($input['amount_ugx'] ?? 0);
+            if (!$email || !$reference) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'Email and payment reference are required']);
+                break;
+            }
+            $result = submitMakerPayment($email, $reference, $plan, $amount);
+            echo json_encode($result);
+        } else {
+            http_response_code(405);
+            echo json_encode(['error' => 'Method not allowed']);
+        }
+        break;
+
+    case 'status':
+        $email = trim($_GET['email'] ?? '');
+        if (!$email) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'Email is required']);
+            break;
+        }
+        $maker = getMakerByEmail($email);
+        if (!$maker) {
+            http_response_code(404);
+            echo json_encode(['success' => false, 'message' => 'Maker not found']);
+            break;
+        }
+        unset($maker['password']);
+        echo json_encode(['success' => true, 'data' => $maker]);
         break;
         
     default:

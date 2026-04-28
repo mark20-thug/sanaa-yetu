@@ -67,9 +67,12 @@
     <div class="modal-body">
       <div id="loginForm">
         <div class="form-group"><input type="text" id="loginName" placeholder="Full Name *"></div>
+        <div class="form-group"><input type="text" id="loginBusinessName" placeholder="Business Name (optional)"></div>
         <div class="form-group"><input type="email" id="loginEmail" placeholder="Email *"></div>
         <div class="form-group"><input type="password" id="loginPassword" placeholder="Password (min 4) *"></div>
         <div class="form-group"><input type="tel" id="whatsappNumber" placeholder="WhatsApp (with code) * e.g., +256700123456"></div>
+        <div class="form-group"><input type="text" id="makerLocation" placeholder="Location (e.g., Kampala)"></div>
+        <div class="form-group"><textarea id="makerBio" placeholder="Short bio/story (optional)"></textarea></div>
         <small style="color:#666; display:block; margin-bottom:15px;">Your WhatsApp will be shown to buyers for orders</small>
         <button class="btn-primary" id="doRegisterBtn"><i class="fab fa-whatsapp"></i> Create Artisan Account</button>
         <div class="toggle-auth" id="switchToLoginBtn">Already have an account? <strong>Login</strong></div>
@@ -77,7 +80,33 @@
       <div id="signinForm" style="display:none;">
         <div class="form-group"><input type="email" id="signinEmail" placeholder="Email"></div>
         <div class="form-group"><input type="password" id="signinPassword" placeholder="Password"></div>
+        <div class="form-group">
+          <label style="font-weight:600; margin-bottom:8px; display:block;">Choose Your Plan Before Payment</label>
+          <div id="planOptions" style="display:grid; gap:10px;">
+            <label class="plan-option" data-plan="starter" style="border:1px solid #ddd; border-radius:12px; padding:10px; cursor:pointer;">
+              <input type="radio" name="makerPlan" value="starter" checked style="margin-right:8px;">
+              <strong>Starter</strong> - UGX 30,000 / month
+              <div style="font-size:12px; color:#666; margin-top:4px;">Up to 10 products, basic visibility.</div>
+            </label>
+            <label class="plan-option" data-plan="pro" style="border:1px solid #ddd; border-radius:12px; padding:10px; cursor:pointer;">
+              <input type="radio" name="makerPlan" value="pro" style="margin-right:8px;">
+              <strong>Studio Pro</strong> - UGX 70,000 / month
+              <div style="font-size:12px; color:#666; margin-top:4px;">Up to 100 products, priority ranking.</div>
+            </label>
+            <label class="plan-option" data-plan="featured" style="border:1px solid #ddd; border-radius:12px; padding:10px; cursor:pointer;">
+              <input type="radio" name="makerPlan" value="featured" style="margin-right:8px;">
+              <strong>Featured Plus</strong> - UGX 120,000 / month
+              <div style="font-size:12px; color:#666; margin-top:4px;">Featured placement + premium exposure.</div>
+            </label>
+          </div>
+        </div>
+        <div class="form-group">
+          <input type="text" id="selectedPlanSummary" readonly value="Selected: Starter (UGX 30,000/month)" style="background:#f5f5f5;">
+        </div>
         <button class="btn-primary" id="doLoginBtn"><i class="fas fa-sign-in-alt"></i> Login to Studio</button>
+        <div class="form-group" style="margin-top:12px;"><input type="text" id="paymentReference" placeholder="Payment Reference / Transaction ID"></div>
+        <button class="btn-primary" id="submitPaymentBtn" style="background:#2e7d32;"><i class="fas fa-receipt"></i> Submit Payment for Approval</button>
+        <small style="color:#666; display:block; margin-top:8px;">Pay first, submit reference, then wait for admin approval before login.</small>
         <div class="toggle-auth" id="switchToRegisterBtn">New artist? <strong>Create Account</strong></div>
       </div>
     </div>
@@ -131,6 +160,30 @@
     </div>
     <div class="modal-body">
       <div id="makerProductsGrid" style="display:grid; gap:12px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- RATING MODAL -->
+<div id="ratingModal" class="modal-overlay">
+  <div class="modal-container" style="max-width: 520px;">
+    <div class="modal-header">
+      <h3 id="ratingModalTitle"><i class="fas fa-star"></i> Rate</h3>
+      <button class="close-modal-btn" id="closeRatingModalBtn">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="ratingTargetText" style="margin-bottom: 12px; color: #555;"></div>
+      <div class="rating-stars" id="ratingStars">
+        <button type="button" class="rating-star" data-score="1">★</button>
+        <button type="button" class="rating-star" data-score="2">★</button>
+        <button type="button" class="rating-star" data-score="3">★</button>
+        <button type="button" class="rating-star" data-score="4">★</button>
+        <button type="button" class="rating-star" data-score="5">★</button>
+      </div>
+      <div class="form-group">
+        <textarea id="ratingComment" placeholder="Optional comment (max 200 chars)"></textarea>
+      </div>
+      <button class="btn-primary" id="submitRatingBtn"><i class="fas fa-paper-plane"></i> Submit Rating</button>
     </div>
   </div>
 </div>

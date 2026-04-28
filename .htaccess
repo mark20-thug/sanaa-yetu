@@ -12,6 +12,8 @@
     RewriteRule ^api/products$ api/products.php [L]
     RewriteRule ^api/makers$ api/makers.php [L]
     RewriteRule ^api/upload$ api/upload.php [L]
+    RewriteRule ^api/admin$ api/admin.php [L]
+    RewriteRule ^api/ratings$ api/ratings.php [L]
 
     # Prevent directory browsing
     Options -Indexes

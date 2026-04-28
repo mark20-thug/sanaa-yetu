@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sanaa Yetu Admin Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>Sanaa Yetu Admin Dashboard</h1>
+    <div class="topbar-actions">
+      <button id="refreshBtn">Refresh</button>
+      <button id="logoutBtn">Logout</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <section id="authSection" class="card">
+      <h2>Admin Access</h2>
+      <p>Enter your admin API key to manage maker and product approvals.</p>
+      <input id="adminKeyInput" type="password" placeholder="Admin API Key">
+      <button id="saveAdminKeyBtn">Unlock Dashboard</button>
+    </section>
+
+    <section id="dashboardSection" class="hidden">
+      <div class="card">
+        <h2>Ratings Analytics</h2>
+        <div class="stats-grid">
+          <div class="stat-box">
+            <div class="stat-label">Total Ratings</div>
+            <div class="stat-value" id="statTotalRatings">0</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Maker Avg Rating</div>
+            <div class="stat-value" id="statMakerAvg">0</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Product Avg Rating</div>
+            <div class="stat-value" id="statProductAvg">0</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Ratings Last 7 Days</div>
+            <div class="stat-value" id="statRecentRatings">0</div>
+          </div>
+        </div>
+      </div>
+      <div class="grid">
+        <div class="card">
+          <h2>Pending Makers</h2>
+          <div id="pendingMakers"></div>
+        </div>
+        <div class="card">
+          <h2>Pending Products</h2>
+          <div id="pendingProducts"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>

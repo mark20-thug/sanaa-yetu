@@ -96,6 +96,42 @@ Visit `http://localhost:8000`
 | `api/makers.php?action=list` | GET | List all makers |
 | `api/makers.php?action=register` | POST | Register new maker |
 | `api/makers.php?action=login` | POST | Login maker |
+| `api/makers.php?action=submit_payment` | POST | Submit payment reference |
+
+### Admin (Protected by `X-Admin-Key`)
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `api/admin.php?action=pending_makers` | GET | List makers awaiting approval |
+| `api/admin.php?action=review_maker` | POST | Approve/reject maker |
+| `api/admin.php?action=pending_products` | GET | List products awaiting moderation |
+| `api/admin.php?action=review_product` | POST | Approve/reject product |
+| `api/admin.php?action=ratings_analytics` | GET | Rating counts and averages |
+
+### Ratings
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `api/ratings.php?action=rate_maker` | POST | Submit maker rating (1-5) |
+| `api/ratings.php?action=rate_product` | POST | Submit product rating (1-5) |
+| `api/ratings.php?action=maker_summary&maker_id=...` | GET | Maker average rating and count |
+| `api/ratings.php?action=product_summary&product_id=...` | GET | Product average rating and count |
+
+### Separate Admin Website
+
+A separate admin web app is available at:
+- `admin/index.html` (or `https://yourdomain.com/admin/`)
+
+Admin workflow:
+1. Open admin dashboard.
+2. Enter `ADMIN_API_KEY`.
+3. Approve/reject pending makers.
+4. Approve/reject pending product listings.
+
+Maker access rule now enforced:
+- Maker must pay and submit payment reference.
+- Admin must approve maker account.
+- Only then maker can login and publish products.
 
 ## Categories
 
@@ -123,12 +159,14 @@ SUPABASE_URL=https://your-project-id.supabase.co
 SUPABASE_KEY=your-supabase-anon-key
 SUPABASE_SERVICE_KEY=your-supabase-service-role-key
 ALLOWED_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
+ADMIN_API_KEY=your-strong-admin-api-key
 ```
 
 Notes:
 - `ALLOWED_ORIGINS` is comma-separated.
 - Keep `SUPABASE_SERVICE_KEY` private (never expose in browser JavaScript).
 - Do not commit real secrets to Git.
+- `ADMIN_API_KEY` protects admin actions in `api/admin.php`.
 
 ### Docker Deployment (Containerized)
 

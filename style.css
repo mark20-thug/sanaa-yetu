@@ -268,4 +268,24 @@ body {
 .amazon-footer { background: var(--amazon-secondary); color: #ddd; text-align: center; padding: 25px; margin-top: 40px; font-size: 0.85rem; }
 .close-modal-btn { background: none; border: none; color: white; font-size: 1.8rem; cursor: pointer; line-height: 1; }
 .back-link { cursor: pointer; color: #FF9900; font-weight: 500; }
+.rating-stars {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin: 8px 0 16px;
+}
+.rating-star {
+  border: none;
+  background: transparent;
+  font-size: 32px;
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: transform 0.1s ease, color 0.1s ease;
+}
+.rating-star:hover {
+  transform: scale(1.08);
+}
+.rating-star.active {
+  color: #f59e0b;
+}
 @media (max-width: 768px) { .search-bar { order: 3; width: 100%; max-width: none; margin: 5px 0; } }
