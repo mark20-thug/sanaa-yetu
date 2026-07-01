@@ -9,10 +9,11 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- ============================================
 CREATE TABLE makers (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    firebase_uid TEXT UNIQUE,
     name TEXT NOT NULL,
     business_name TEXT,
     email TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL,
+    password TEXT NOT NULL DEFAULT '',
     whatsapp TEXT NOT NULL,
     location TEXT,
     bio TEXT,
@@ -96,6 +97,7 @@ CREATE INDEX idx_products_artisan ON products(artisan_id);
 CREATE INDEX idx_products_category ON products(category);
 CREATE INDEX idx_products_status ON products(status);
 CREATE INDEX idx_makers_email ON makers(email);
+CREATE INDEX idx_makers_firebase_uid ON makers(firebase_uid);
 CREATE INDEX idx_makers_payment_approval ON makers(payment_status, approval_status);
 
 -- ============================================

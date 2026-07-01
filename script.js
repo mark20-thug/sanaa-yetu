@@ -29,10 +29,6 @@ function getRaterToken() {
 
 async function loadData() {
   try {
-    // Check for stored session
-    const storedUser = localStorage.getItem("sanaa_current_user");
-    if (storedUser) currentUser = JSON.parse(storedUser);
-    
     // Fetch products from API
     const productsRes = await fetch(`${API_BASE}/products.php?action=list`);
     allProducts = await productsRes.json();
@@ -92,6 +88,37 @@ function saveCurrentUser() {
   if(currentUser) localStorage.setItem("sanaa_current_user", JSON.stringify(currentUser));
   else localStorage.removeItem("sanaa_current_user");
 }
+
+// ======================= FIREBASE AUTH =======================
+let firebaseUser = null;
+
+firebase.auth().onAuthStateChanged(async (user) => {
+  firebaseUser = user;
+  if (user) {
+    try {
+      const idToken = await user.getIdToken(true);
+      const res = await fetch(`${API_BASE}/makers.php?action=firebase_lookup`, {
+        headers: { 'Authorization': `Bearer ${idToken}` }
+      });
+      const result = await res.json();
+      if (result.success && result.data) {
+        currentUser = result.data;
+      } else {
+        currentUser = null;
+      }
+    } catch (e) {
+      console.error('Auth restore error:', e);
+      currentUser = null;
+    }
+    saveCurrentUser();
+  } else {
+    if (currentUser) {
+      currentUser = null;
+      saveCurrentUser();
+    }
+  }
+  updateUIBasedOnAuth();
+});
 
 let currentFilter = "all";
 let currentSearch = "";
@@ -339,13 +366,14 @@ async function submitRatingFromModal() {
   }
 }
 
-// ======================= AUTH FIXED =======================
+// ======================= AUTH (Firebase) =======================
 function openAuthModal() { document.getElementById('authModal').style.display = 'flex'; }
 function closeAuthModal() { document.getElementById('authModal').style.display = 'none'; }
 function openDashboardModal() { if(!currentUser) { openAuthModal(); return; } document.getElementById('dashboardUserName').innerText = currentUser.name; renderUserProducts(); document.getElementById('dashboardModal').style.display = 'flex'; }
 function closeDashboardModal() { document.getElementById('dashboardModal').style.display = 'none'; }
 function toggleToLogin() { document.getElementById('loginForm').style.display='none'; document.getElementById('signinForm').style.display='block'; document.getElementById('authModalTitle').innerHTML='<i class="fas fa-sign-in-alt"></i> Welcome Back'; }
 function toggleToRegister() { document.getElementById('loginForm').style.display='block'; document.getElementById('signinForm').style.display='none'; document.getElementById('authModalTitle').innerHTML='<i class="fas fa-hands-helping"></i> Become a Maker'; }
+
 async function registerUser() {
   const name = document.getElementById('loginName').value.trim();
   const businessName = document.getElementById('loginBusinessName').value.trim();
@@ -357,58 +385,77 @@ async function registerUser() {
   if (!name || !email || !password || password.length < 4) { alert("All fields required, password min 4 chars"); return; }
   if (!whatsapp) { alert("WhatsApp number required for buyers to contact you!"); return; }
   if (!whatsapp.startsWith('+')) whatsapp = '+' + whatsapp.replace(/[^0-9]/g, '');
-  
+
   try {
-    const res = await fetch(`${API_BASE}/makers.php?action=register`, {
+    // 1. Create Firebase user
+    const cred = await firebase.auth().createUserWithEmailAndPassword(email, password);
+    const fireUid = cred.user.uid;
+
+    // 2. Create maker record in backend
+    const res = await fetch(`${API_BASE}/makers.php?action=firebase_register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        firebase_uid: fireUid,
         name,
         business_name: businessName || name,
         email,
-        password,
         whatsapp,
         location,
         bio
       })
     });
     const result = await res.json();
-    
+
     if (result.success) {
       alert("✅ Account created. Next: complete payment and submit your payment reference, then wait for admin approval.");
+      await firebase.auth().signOut();
       toggleToLogin();
       document.getElementById('signinEmail').value = email;
     } else {
+      await cred.user.delete();
       alert(result.message || 'Registration failed');
     }
-  } catch(e) {
+  } catch (e) {
     console.error(e);
-    alert('Registration failed. Please try again.');
+    if (e.code === 'auth/email-already-in-use') {
+      alert('This email is already registered. Please login instead.');
+    } else if (e.code === 'auth/weak-password') {
+      alert('Password must be at least 6 characters.');
+    } else {
+      alert(e.message || 'Registration failed. Please try again.');
+    }
   }
 }
 
 async function loginUser() {
   const email = document.getElementById('signinEmail').value.trim();
   const password = document.getElementById('signinPassword').value;
-  
+  if (!email || !password) { alert("Email and password are required"); return; }
+
   try {
-    const res = await fetch(`${API_BASE}/makers.php?action=login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    });
-    const result = await res.json();
-    
-    if (result.success) {
-      currentUser = { id: result.data.id, name: result.data.name, email: result.data.email, whatsapp: result.data.whatsapp };
-      saveCurrentUser(); updateUIBasedOnAuth(); closeAuthModal();
-      openDashboardModal();
-    } else {
-      alert(result.message || 'Login failed');
-    }
-  } catch(e) {
+    await firebase.auth().signInWithEmailAndPassword(email, password);
+  } catch (e) {
     console.error(e);
-    alert('Login failed. Please try again.');
+    if (e.code === 'auth/user-not-found' || e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') {
+      alert('Invalid email or password. Make sure you are registered and approved.');
+    } else if (e.code === 'auth/too-many-requests') {
+      alert('Too many login attempts. Please try again later.');
+    } else {
+      alert(e.message || 'Login failed');
+    }
+  }
+}
+
+async function googleLogin() {
+  try {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    await firebase.auth().signInWithPopup(provider);
+  } catch (e) {
+    console.error(e);
+    if (e.code !== 'auth/popup-closed-by-user') {
+      alert(e.message || 'Google sign-in failed');
+    }
   }
 }
 
@@ -445,13 +492,39 @@ async function submitPaymentReference() {
     alert('Failed to submit payment reference');
   }
 }
-function logoutUser() { currentUser = null; saveCurrentUser(); viewMode="home"; currentFilter="all"; currentSearch=""; document.getElementById('searchInput').value=""; renderMarketplace(); renderShops(); updateUIBasedOnAuth(); updateViewTitle(); }
+
+function logoutUser() {
+  firebase.auth().signOut();
+  viewMode = "home";
+  currentFilter = "all";
+  currentSearch = "";
+  document.getElementById('searchInput').value = "";
+  renderMarketplace();
+  renderShops();
+  updateViewTitle();
+}
+
 function updateUIBasedOnAuth() {
-  const authBtn = document.getElementById('authBtn'); const myGoods = document.getElementById('myGoodsBtn'); const dashboard = document.getElementById('dashboardBtn'); const logout = document.getElementById('logoutBtn'); const greeting = document.getElementById('userGreeting');
-  if(currentUser) {
-    if(authBtn) authBtn.style.display='none'; if(myGoods) myGoods.style.display='flex'; if(dashboard) dashboard.style.display='flex'; if(logout) logout.style.display='flex'; if(greeting) { greeting.style.display='block'; greeting.innerHTML = `<i class="fas fa-user-check"></i> ${currentUser.name}`; }
+  const authBtn = document.getElementById('authBtn');
+  const myGoods = document.getElementById('myGoodsBtn');
+  const dashboard = document.getElementById('dashboardBtn');
+  const logout = document.getElementById('logoutBtn');
+  const greeting = document.getElementById('userGreeting');
+  if (currentUser) {
+    if (authBtn) authBtn.style.display = 'none';
+    if (myGoods) myGoods.style.display = 'flex';
+    if (dashboard) dashboard.style.display = 'flex';
+    if (logout) logout.style.display = 'flex';
+    if (greeting) {
+      greeting.style.display = 'block';
+      greeting.innerHTML = `<i class="fas fa-user-check"></i> ${currentUser.name}`;
+    }
   } else {
-    if(authBtn) authBtn.style.display='flex'; if(myGoods) myGoods.style.display='none'; if(dashboard) dashboard.style.display='none'; if(logout) logout.style.display='none'; if(greeting) greeting.style.display='none';
+    if (authBtn) authBtn.style.display = 'flex';
+    if (myGoods) myGoods.style.display = 'none';
+    if (dashboard) dashboard.style.display = 'none';
+    if (logout) logout.style.display = 'none';
+    if (greeting) greeting.style.display = 'none';
   }
 }
 function renderUserProducts() {
@@ -536,6 +609,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('logoutBtn').onclick = logoutUser;
   document.getElementById('doRegisterBtn').onclick = registerUser;
   document.getElementById('doLoginBtn').onclick = loginUser;
+  document.getElementById('googleLoginBtn').onclick = googleLogin;
   document.getElementById('submitPaymentBtn').onclick = submitPaymentReference;
   document.getElementById('publishProductBtn').onclick = addProduct;
   document.getElementById('closeAuthModalBtn').onclick = closeAuthModal;

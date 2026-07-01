@@ -9,6 +9,7 @@ services:
       SUPABASE_KEY: ${SUPABASE_KEY}
       SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:8000,http://127.0.0.1:8000}
+      FIREBASE_WEB_API_KEY: ${FIREBASE_WEB_API_KEY}
     volumes:
       - ./uploads:/var/www/html/uploads
     restart: unless-stopped

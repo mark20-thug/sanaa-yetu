@@ -8,6 +8,15 @@ define('SUPABASE_URL', getenv('SUPABASE_URL') ?: 'https://YOUR_PROJECT_ID.supaba
 define('SUPABASE_KEY', getenv('SUPABASE_KEY') ?: 'YOUR_ANON_KEY');
 define('SUPABASE_SERVICE_KEY', getenv('SUPABASE_SERVICE_KEY') ?: 'YOUR_SERVICE_ROLE_KEY');
 define('ADMIN_API_KEY', getenv('ADMIN_API_KEY') ?: 'CHANGE_ME_ADMIN_KEY');
+define('FIREBASE_WEB_API_KEY', getenv('FIREBASE_WEB_API_KEY') ?: 'YOUR_FIREBASE_WEB_API_KEY');
+
+// Cloudflare R2 Object Storage
+define('CLOUDFLARE_R2_ACCOUNT_ID', getenv('CLOUDFLARE_R2_ACCOUNT_ID') ?: '');
+define('CLOUDFLARE_R2_ACCESS_KEY_ID', getenv('CLOUDFLARE_R2_ACCESS_KEY_ID') ?: '');
+define('CLOUDFLARE_R2_SECRET_ACCESS_KEY', getenv('CLOUDFLARE_R2_SECRET_ACCESS_KEY') ?: '');
+define('CLOUDFLARE_R2_BUCKET', getenv('CLOUDFLARE_R2_BUCKET') ?: 'heritage-images');
+define('CLOUDFLARE_R2_PUBLIC_URL', getenv('CLOUDFLARE_R2_PUBLIC_URL') ?: '');
+define('CLOUDFLARE_R2_REGION', getenv('CLOUDFLARE_R2_REGION') ?: 'auto');
 
 /**
  * Handle CORS using an allowlist.
@@ -72,6 +81,81 @@ function supabaseRequest($endpoint, $method = 'GET', $data = null) {
         'code' => $httpCode,
         'data' => json_decode($response, true)
     ];
+}
+
+/**
+ * Upload a file to Cloudflare R2 (S3-compatible) using AWS Signature V4 via cURL
+ */
+function uploadToR2($filePath, $key, $mimeType) {
+    $accountId = CLOUDFLARE_R2_ACCOUNT_ID;
+    $accessKey = CLOUDFLARE_R2_ACCESS_KEY_ID;
+    $secretKey = CLOUDFLARE_R2_SECRET_ACCESS_KEY;
+    $bucket = CLOUDFLARE_R2_BUCKET;
+    $region = CLOUDFLARE_R2_REGION;
+    $publicUrl = CLOUDFLARE_R2_PUBLIC_URL;
+
+    if (!$accountId || !$accessKey || !$secretKey) {
+        return ['success' => false, 'message' => 'R2 not configured'];
+    }
+
+    $host = "{$accountId}.r2.cloudflarestorage.com";
+    $endpoint = "https://{$host}/{$bucket}/{$key}";
+    $service = 's3';
+    $dateShort = gmdate('Ymd');
+    $dateFull = gmdate('Ymd\THis\Z');
+    $body = file_get_contents($filePath);
+    $payloadHash = hash('sha256', $body);
+
+    // Canonical Request
+    $canonicalUri = '/' . $bucket . '/' . str_replace('%2F', '/', rawurlencode($key));
+    $canonicalQueryString = '';
+    $canonicalHeaders = "host:{$host}\nx-amz-content-sha256:{$payloadHash}\nx-amz-date:{$dateFull}\n";
+    $signedHeaders = 'host;x-amz-content-sha256;x-amz-date';
+    $canonicalRequest = "PUT\n{$canonicalUri}\n{$canonicalQueryString}\n{$canonicalHeaders}\n{$signedHeaders}\n{$payloadHash}";
+
+    // String to Sign
+    $algorithm = 'AWS4-HMAC-SHA256';
+    $credentialScope = "{$dateShort}/{$region}/{$service}/aws4_request";
+    $stringToSign = "{$algorithm}\n{$dateFull}\n{$credentialScope}\n" . hash('sha256', $canonicalRequest);
+
+    // Signing Key
+    $kSecret = 'AWS4' . $secretKey;
+    $kDate = hash_hmac('sha256', $dateShort, $kSecret, true);
+    $kRegion = hash_hmac('sha256', $region, $kDate, true);
+    $kService = hash_hmac('sha256', $service, $kRegion, true);
+    $kSigning = hash_hmac('sha256', 'aws4_request', $kService, true);
+    $signature = hash_hmac('sha256', $stringToSign, $kSigning);
+
+    // Authorization Header
+    $authorization = "{$algorithm} Credential={$accessKey}/{$credentialScope}, SignedHeaders={$signedHeaders}, Signature={$signature}";
+
+    $ch = curl_init($endpoint);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PUT');
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Content-Type: ' . $mimeType,
+        'Content-Length: ' . strlen($body),
+        'x-amz-content-sha256: ' . $payloadHash,
+        'x-amz-date: ' . $dateFull,
+        'Authorization: ' . $authorization,
+        'Host: ' . $host,
+    ]);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $error = curl_error($ch);
+    curl_close($ch);
+
+    if ($httpCode === 200) {
+        $url = $publicUrl
+            ? rtrim($publicUrl, '/') . '/' . $key
+            : "https://{$host}/{$bucket}/{$key}";
+        return ['success' => true, 'url' => $url];
+    }
+
+    return ['success' => false, 'message' => 'R2 upload failed: ' . ($error ?: "HTTP {$httpCode}")];
 }
 
 /**
@@ -206,6 +290,108 @@ function loginMaker($email, $password) {
 function getMakerByEmail($email) {
     $result = supabaseRequest('makers?email=eq.' . urlencode($email) . '&limit=1');
     return $result['data'][0] ?? null;
+}
+
+/**
+ * Verify a Firebase ID token using Google's tokeninfo endpoint
+ */
+function verifyFirebaseToken($idToken) {
+    $url = 'https://oauth2.googleapis.com/tokeninfo?id_token=' . urlencode($idToken);
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpCode !== 200) {
+        return null;
+    }
+
+    $data = json_decode($response, true);
+    if (!$data || !isset($data['sub'])) {
+        return null;
+    }
+
+    return [
+        'uid' => $data['sub'],
+        'email' => $data['email'] ?? '',
+        'name' => $data['name'] ?? '',
+        'picture' => $data['picture'] ?? ''
+    ];
+}
+
+/**
+ * Register a new maker with Firebase UID
+ */
+function registerWithFirebase($firebaseUid, $name, $email, $whatsapp, $businessName = '', $location = '', $bio = '') {
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        return ['success' => false, 'message' => 'Invalid email'];
+    }
+    if (!$firebaseUid) {
+        return ['success' => false, 'message' => 'Firebase UID required'];
+    }
+
+    // Check if email already registered
+    $check = supabaseRequest('makers?email=eq.' . urlencode($email) . '&limit=1');
+    if (!empty($check['data'])) {
+        return ['success' => false, 'message' => 'Email already registered'];
+    }
+
+    // Check if firebase_uid already registered
+    $checkUid = supabaseRequest('makers?firebase_uid=eq.' . urlencode($firebaseUid) . '&limit=1');
+    if (!empty($checkUid['data'])) {
+        return ['success' => false, 'message' => 'Account already registered'];
+    }
+
+    $data = [
+        'firebase_uid' => $firebaseUid,
+        'name' => $name,
+        'business_name' => $businessName ?: $name,
+        'email' => $email,
+        'password' => '', // No password stored — Firebase handles auth
+        'whatsapp' => $whatsapp,
+        'location' => $location,
+        'bio' => $bio,
+        'payment_status' => 'unpaid',
+        'approval_status' => 'pending',
+        'verification_status' => 'unverified',
+        'plan' => 'free',
+        'max_products' => 10,
+        'can_feature_products' => false
+    ];
+
+    $result = supabaseRequest('makers', 'POST', $data);
+
+    if ($result['code'] === 201) {
+        $maker = $result['data'][0];
+        unset($maker['password']);
+        return ['success' => true, 'data' => $maker];
+    }
+
+    return ['success' => false, 'message' => 'Registration failed'];
+}
+
+/**
+ * Look up a maker by Firebase UID
+ */
+function getMakerByFirebaseUid($firebaseUid) {
+    if (!$firebaseUid) return null;
+    $result = supabaseRequest('makers?firebase_uid=eq.' . urlencode($firebaseUid) . '&limit=1');
+    return $result['data'][0] ?? null;
+}
+
+/**
+ * Login / lookup maker by Firebase UID — returns maker data
+ */
+function loginWithFirebase($firebaseUid) {
+    $maker = getMakerByFirebaseUid($firebaseUid);
+    if (!$maker) {
+        return ['success' => false, 'message' => 'Maker account not found. Please register first.'];
+    }
+
+    unset($maker['password']);
+    return ['success' => true, 'data' => $maker];
 }
 
 function getMakerById($makerId) {

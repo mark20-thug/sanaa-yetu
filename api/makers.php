@@ -75,6 +75,63 @@ switch ($action) {
         }
         break;
 
+    case 'firebase_register':
+        if ($method === 'POST') {
+            $input = json_decode(file_get_contents('php://input'), true);
+            if (
+                !is_array($input) ||
+                empty(trim($input['firebase_uid'] ?? '')) ||
+                empty(trim($input['name'] ?? '')) ||
+                empty(trim($input['email'] ?? '')) ||
+                empty(trim($input['whatsapp'] ?? ''))
+            ) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'Missing required fields']);
+                break;
+            }
+
+            $result = registerWithFirebase(
+                trim($input['firebase_uid']),
+                trim($input['name']),
+                trim($input['email']),
+                trim($input['whatsapp']),
+                trim($input['business_name'] ?? ''),
+                trim($input['location'] ?? ''),
+                trim($input['bio'] ?? '')
+            );
+            echo json_encode($result);
+        } else {
+            http_response_code(405);
+            echo json_encode(['error' => 'Method not allowed']);
+        }
+        break;
+
+    case 'firebase_lookup':
+        // Verify Firebase ID token from Authorization header
+        $headers = function_exists('getallheaders') ? getallheaders() : [];
+        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? ($_SERVER['HTTP_AUTHORIZATION'] ?? '');
+        $idToken = '';
+        if (preg_match('/^Bearer\s+(.+)$/i', $authHeader, $matches)) {
+            $idToken = $matches[1];
+        }
+
+        if (!$idToken) {
+            http_response_code(401);
+            echo json_encode(['success' => false, 'message' => 'No authorization token provided']);
+            break;
+        }
+
+        $tokenData = verifyFirebaseToken($idToken);
+        if (!$tokenData) {
+            http_response_code(401);
+            echo json_encode(['success' => false, 'message' => 'Invalid or expired token']);
+            break;
+        }
+
+        $result = loginWithFirebase($tokenData['uid']);
+        echo json_encode($result);
+        break;
+
     case 'submit_payment':
         if ($method === 'POST') {
             $input = json_decode(file_get_contents('php://input'), true);

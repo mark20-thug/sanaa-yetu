@@ -15,6 +15,10 @@
     RewriteRule ^api/admin$ api/admin.php [L]
     RewriteRule ^api/ratings$ api/ratings.php [L]
 
+    # Pass Authorization header to PHP (needed for Firebase token verification)
+    RewriteCond %{HTTP:Authorization} .+
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
     # Prevent directory browsing
     Options -Indexes
 
