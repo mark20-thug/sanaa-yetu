@@ -1,4 +1,4 @@
-# Sanaa Yetu (Lite Overview)
+# Heritage (Lite Overview)
 
 ## What this system does
 
@@ -75,5 +75,5 @@ It connects artisans (makers) directly with buyers and allows ordering through W
 
 ## Business value
 
-Sanaa Yetu helps artisans reach more customers, keeps communication direct, and makes product discovery/order flow simple and mobile-friendly.
+Heritage helps artisans reach more customers, keeps communication direct, and makes product discovery/order flow simple and mobile-friendly.
 

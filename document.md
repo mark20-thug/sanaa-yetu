@@ -1,8 +1,8 @@
-# Sanaa Yetu System Documentation
+#Heritage System Documentation
 
 ## Overview
 
-Sanaa Yetu is a web marketplace that connects Ugandan artisans (makers) with buyers.  
+Hertage is a web marketplace that connects Ugandan artisans (makers) with buyers.  
 The system is built as a lightweight single-page frontend with a PHP API backend and Supabase as the database.
 
 Main goals of the platform:

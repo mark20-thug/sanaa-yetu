@@ -1,4 +1,4 @@
-# Sanaa Yetu - Technical Implementation Checklist
+# Heritage - Technical Implementation Checklist
 
 This checklist maps the monetization/trust strategy to your current codebase so implementation is straightforward.
 
