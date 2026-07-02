@@ -54,6 +54,17 @@ if (!isset($allowedMimeTypes[$mimeType])) {
     exit;
 }
 
+$extension = $allowedMimeTypes[$mimeType];
+$filename = 'product_' . time() . '_' . bin2hex(random_bytes(6)) . '.' . $extension;
+
+// ── Upload to Cloudflare R2 (primary) ────────────────
+$r2Result = uploadToR2($file['tmp_name'], $filename, $mimeType);
+if ($r2Result['success']) {
+    echo json_encode(['success' => true, 'url' => $r2Result['url']]);
+    exit;
+}
+
+// ── Fallback: local upload ───────────────────────────
 $uploadsDir = dirname(__DIR__) . '/uploads';
 if (!is_dir($uploadsDir) && !mkdir($uploadsDir, 0755, true)) {
     http_response_code(500);
@@ -61,10 +72,7 @@ if (!is_dir($uploadsDir) && !mkdir($uploadsDir, 0755, true)) {
     exit;
 }
 
-$extension = $allowedMimeTypes[$mimeType];
-$filename = 'product_' . time() . '_' . bin2hex(random_bytes(6)) . '.' . $extension;
 $destination = $uploadsDir . '/' . $filename;
-
 if (!move_uploaded_file($file['tmp_name'], $destination)) {
     http_response_code(500);
     echo json_encode(['success' => false, 'message' => 'Failed to save uploaded file']);

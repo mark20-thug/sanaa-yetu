@@ -25,7 +25,9 @@ define('CLOUDFLARE_R2_REGION', getenv('CLOUDFLARE_R2_REGION') ?: 'auto');
 function handleCors() {
     $allowedOriginsRaw = getenv('ALLOWED_ORIGINS') ?: '';
     $allowedOrigins = array_filter(array_map('trim', explode(',', $allowedOriginsRaw)));
+    $allowedOrigins[] = 'http://localhost';
     $allowedOrigins[] = 'http://localhost:8000';
+    $allowedOrigins[] = 'http://127.0.0.1';
     $allowedOrigins[] = 'http://127.0.0.1:8000';
 
     $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
@@ -293,12 +295,20 @@ function getMakerByEmail($email) {
 }
 
 /**
- * Verify a Firebase ID token using Google's tokeninfo endpoint
+ * Verify a Firebase ID token using Firebase Auth REST API
+ * (replaces deprecated Google tokeninfo endpoint)
  */
 function verifyFirebaseToken($idToken) {
-    $url = 'https://oauth2.googleapis.com/tokeninfo?id_token=' . urlencode($idToken);
+    if (!FIREBASE_WEB_API_KEY || FIREBASE_WEB_API_KEY === 'YOUR_FIREBASE_WEB_API_KEY') {
+        return null;
+    }
+
+    $url = 'https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=' . urlencode(FIREBASE_WEB_API_KEY);
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['idToken' => $idToken]));
+    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
     curl_setopt($ch, CURLOPT_TIMEOUT, 10);
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -309,15 +319,16 @@ function verifyFirebaseToken($idToken) {
     }
 
     $data = json_decode($response, true);
-    if (!$data || !isset($data['sub'])) {
+    if (!$data || !isset($data['users'][0]['localId'])) {
         return null;
     }
 
+    $user = $data['users'][0];
     return [
-        'uid' => $data['sub'],
-        'email' => $data['email'] ?? '',
-        'name' => $data['name'] ?? '',
-        'picture' => $data['picture'] ?? ''
+        'uid' => $user['localId'],
+        'email' => $user['email'] ?? '',
+        'name' => $user['displayName'] ?? '',
+        'picture' => $user['photoUrl'] ?? ''
     ];
 }
 

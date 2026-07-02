@@ -1,7 +1,7 @@
 FROM php:8.2-apache
 
 # Enable Apache modules used by .htaccess
-RUN a2enmod rewrite headers expires deflate
+RUN a2enmod rewrite headers expires deflate remoteip
 
 # PHP extensions needed by the APIs
 RUN docker-php-ext-install curl fileinfo
